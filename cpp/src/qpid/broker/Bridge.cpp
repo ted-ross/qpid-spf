@@ -73,7 +73,7 @@ Bridge::Bridge(const std::string& _name, Link* _link, framing::ChannelId _id,
               : _queueName),
     altEx(ae), persistenceId(0),
     connState(0), conn(0), initialize(init), detached(false),
-    useExistingQueue(!_queueName.empty()),
+    useExistingQueue(false),
     sessionName("qpid.bridge_session_" + name + "_" + link->getBroker()->getFederationTag())
 {
     ManagementAgent* agent = link->getBroker()->getManagementAgent();
