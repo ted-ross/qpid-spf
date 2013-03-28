@@ -1,0 +1,61 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#
+# SPF library CMake fragment, to be included in CMakeLists.txt
+# 
+
+# Optional SPF-routing support.
+
+include(CheckIncludeFiles)
+include(CheckLibraryExists)
+include(FindPythonLibs)
+
+#set (CMAKE_VERBOSE_MAKEFILE ON)  # for debugging
+
+set (spf_default ON)
+option(BUILD_SPF "Build the Shortest-Path-Federation Plugin" ${spf_default})
+if(BUILD_SPF)
+
+    include_directories(${PYTHON_INCLUDE_DIRS})
+
+    set(spf_SOURCES
+        qpid/spf/SpfExchange.cpp
+        qpid/spf/SpfExchange.h
+        qpid/spf/Plugin.cpp
+        qpid/spf/PythonTypes.cpp
+        qpid/spf/PythonTypes.h
+        qpid/spf/Router.cpp
+        qpid/spf/Router.h
+    )
+
+    add_library(spf MODULE ${spf_SOURCES})
+    target_link_libraries(spf qpidbroker ${PYTHON_LIBRARIES})
+    set_target_properties(spf PROPERTIES
+                          PREFIX ""
+                          COMPILE_DEFINITIONS _IN_QPID_BROKER
+    )
+
+    install(
+        TARGETS spf
+        DESTINATION ${QPIDD_MODULE_DIR}
+        COMPONENT ${QPID_COMPONENT_BROKER}
+    )
+
+endif (BUILD_SPF)
+
