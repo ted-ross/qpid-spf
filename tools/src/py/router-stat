@@ -1,0 +1,255 @@
+#!/usr/bin/env python
+
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+import os
+from optparse import OptionParser, OptionGroup
+import sys
+import locale
+import socket
+import re
+from qpid.messaging import Connection
+
+home = os.environ.get("QPID_TOOLS_HOME", os.path.normpath("/usr/share/qpid-tools"))
+sys.path.append(os.path.join(home, "python"))
+
+from qpidtoollibs import BrokerAgent
+from qpidtoollibs import Display, Header, Sorter, YN, Commas, TimeLong
+
+
+class Config:
+    def __init__(self):
+        self._host = "localhost"
+        self._connTimeout = 10
+        self._types = ""
+        self._limit = 50
+        self._increasing = False
+        self._sortcol = "ID"
+        self._sasl_mechanism = None
+
+config = Config()
+
+def OptionsAndArguments(argv):
+    """ Set global variables for options, return arguments """
+
+    global config
+
+    parser = OptionParser(usage="usage: %prog [options] [-d <domain>] -[lcHTMD]")
+
+    group1 = OptionGroup(parser, "General Options")
+    group1.add_option("-b", "--broker",  action="store", type="string", default="localhost", metavar="<url>",
+                      help="URL of the broker to query")
+    group1.add_option("-t", "--timeout", action="store", type="int", default=10, metavar="<secs>",
+                      help="Maximum time to wait for broker connection (in seconds)")
+    group1.add_option("--sasl-mechanism", action="store", type="string", metavar="<mech>",
+                      help="SASL mechanism for authentication (e.g. EXTERNAL, ANONYMOUS, PLAIN, CRAM-MD, DIGEST-MD5, GSSAPI). SASL automatically picks the most secure available mechanism - use this option to override.")
+    group1.add_option("-d", "--domain", action="store", help="Router Domain")
+    parser.add_option_group(group1)
+
+    group2 = OptionGroup(parser, "Display Options")
+    group2.add_option("-l", "--link-state",     help="Show Router's Link State",          action="store_const", const="l", dest="show")
+    group2.add_option("-c", "--all-link-state", help="Show Link State for all Routers",   action="store_const", const="c", dest="show")
+    group2.add_option("-H", "--next-hops",      help="Show Next-Hops for Remote Routers", action="store_const", const="H", dest="show")
+    group2.add_option("-T", "--topo",           help="Show Topological Routing Table",    action="store_const", const="T", dest="show")
+    group2.add_option("-M", "--mobile",         help="Show Mobile Routing Table",         action="store_const", const="M", dest="show")
+    group2.add_option("-D", "--all-domains",    help="Show Router Domains",               action="store_const", const="D", dest="show")
+
+    group2.add_option("-S", "--sort-by",  metavar="<colname>", default="ID",     help="Sort by column name")
+    group2.add_option(      "--decreasing", action="store_true", default=False,  help="Sort by increasing value (default = increasing)")
+    group2.add_option("-L", "--limit", type="int", default=50, metavar="<n>",    help="Limit output to n rows")
+
+    parser.add_option_group(group2)
+
+    opts, args = parser.parse_args(args=argv)
+
+    if not opts.show:
+        parser.error("You must specify one of these options: -l, -c, -H, -T, -M, or -D. For details, try $ router-stat --help")
+
+    config._types = opts.show
+    config._sortcol = opts.sort_by
+    config._host = opts.broker
+    config._connTimeout = opts.timeout
+    config._increasing = not opts.decreasing
+    config._limit = opts.limit
+    config._sasl_mechanism = opts.sasl_mechanism
+    config._domain = opts.domain
+
+    return args
+
+class BrokerManager:
+    def __init__(self):
+        self.brokerName = None
+        self.connection = None
+        self.agent     = None
+        self.cluster    = None
+
+    def SetBroker(self, brokerUrl, mechanism):
+        self.url = brokerUrl
+        self.connection = Connection.establish(self.url, sasl_mechanisms=mechanism)
+        self.agent = BrokerAgent(self.connection)
+
+    def Disconnect(self):
+        """ Release any allocated brokers.  Ignore any failures as the tool is
+        shutting down.
+        """
+        try:
+            connection.close()
+        except:
+            pass
+
+    def displayLinkState(self):
+        disp = Display(prefix="  ")
+        heads = []
+        heads.append(Header('Property'))
+        heads.append(Header('Value'))
+        rows = []
+        router = self.agent.getRouter(config._domain)
+        ls = router.getRouterData('link-state')
+        rows.append(('Router-ID', ls['id']))
+        rows.append(('Area', ls['area']))
+        rows.append(('Sequence', ls['ls_seq']))
+        rows.append(('Neighbors', ls['peers']))
+
+        title = "Router's Link State:"
+        disp.formattedTable(title, heads, rows)
+
+    def displayCollection(self):
+        disp = Display(prefix="  ")
+        heads = []
+        heads.append(Header("ID"))
+        heads.append(Header("Area"))
+        heads.append(Header("Sequence"))
+        heads.append(Header("Neighbors"))
+        rows = []
+        router = self.agent.getRouter(config._domain)
+        coll = router.getRouterData('link-state-set')
+        for ls in coll.values():
+            rows.append((ls['id'], ls['area'], ls['ls_seq'], ls['peers']))
+
+        title = "Link State Collection:"
+        if config._sortcol:
+            sorter = Sorter(heads, rows, config._sortcol, config._limit, config._increasing)
+            dispRows = sorter.getSorted()
+        else:
+            dispRows = rows
+        disp.formattedTable(title, heads, dispRows)
+
+    def displayNextHops(self):
+        disp = Display(prefix="  ")
+        heads = []
+        heads.append(Header("ID"))
+        heads.append(Header("NextHop"))
+        rows = []
+        router = self.agent.getRouter(config._domain)
+        hops = router.getRouterData('next-hops')
+        for dest,hop in hops.items():
+            rows.append((dest, hop))
+
+        title = "Next Hops to Destinations:"
+        if config._sortcol:
+            sorter = Sorter(heads, rows, config._sortcol, config._limit, config._increasing)
+            dispRows = sorter.getSorted()
+        else:
+            dispRows = rows
+        disp.formattedTable(title, heads, dispRows)
+
+    def displayRouteTable(self, mobile):
+        disp = Display(prefix="  ")
+        heads = []
+        heads.append(Header("Key"))
+        heads.append(Header("NextHop"))
+        rows = []
+        router = self.agent.getRouter(config._domain)
+        result = {}
+        if mobile:
+            result = router.getRouterData('mobile-table')
+        else:
+            result = router.getRouterData('topo-table')
+        routes = result['table']
+
+        for dest,hop in routes:
+            rows.append((dest, hop))
+
+        title = "Next Hops to Address:"
+        if config._sortcol:
+            if config._sortcol == "ID":
+                config._sortcol = "Key"
+            sorter = Sorter(heads, rows, config._sortcol, config._limit, config._increasing)
+            dispRows = sorter.getSorted()
+        else:
+            dispRows = rows
+        disp.formattedTable(title, heads, dispRows)
+
+    def displayDomains(self):
+        disp = Display(prefix="  ")
+        heads = []
+        heads.append(Header("Domain"))
+        heads.append(Header("HoldingQueueDepth"))
+        rows = []
+        routers = self.agent.getAllRouters()
+        for router in routers:
+            queue = self.agent.getQueue('spf_holding_%s' % router.domain)
+            depth = 0
+            if queue:
+                depth = queue.msgDepth
+            rows.append((router.domain, depth))
+
+        title = "Router Domains:"
+        if config._sortcol:
+            if config._sortcol == "ID":
+                config._sortcol = "Domain"
+            sorter = Sorter(heads, rows, config._sortcol, config._limit, config._increasing)
+            dispRows = sorter.getSorted()
+        else:
+            dispRows = rows
+        disp.formattedTable(title, heads, dispRows)
+
+    def displayMain(self, names, main):
+        if   main == 'l': self.displayLinkState()
+        elif main == 'c': self.displayCollection()
+        elif main == 'H': self.displayNextHops()
+        elif main == 'T': self.displayRouteTable(False)
+        elif main == 'M': self.displayRouteTable(True)
+        elif main == 'D': self.displayDomains()
+
+    def display(self, names):
+        self.displayMain(names, config._types)
+
+
+def main(argv=None):
+
+    args = OptionsAndArguments(argv)
+    bm   = BrokerManager()
+
+    try:
+        bm.SetBroker(config._host, config._sasl_mechanism)
+        bm.display(args)
+        bm.Disconnect()
+        return 0
+    except KeyboardInterrupt:
+        print
+    except Exception,e:
+        print "Failed: %s - %s" % (e.__class__.__name__, e)
+
+    bm.Disconnect()   # try to deallocate brokers
+    return 1
+
+if __name__ == "__main__":
+        sys.exit(main())

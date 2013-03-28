@@ -34,7 +34,7 @@
 namespace qpid {
 namespace broker {
 
-class TopicExchange : public virtual Exchange {
+class TopicExchange : public Exchange {
 
     class Normalizer;
 

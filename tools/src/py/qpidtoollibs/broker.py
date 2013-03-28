@@ -194,6 +194,12 @@ class BrokerAgent(object):
   def getMemory(self):
     return self._getSingleObject(Memory)
 
+  def getAllRouters(self):
+    return self._getAllBrokerObjects(Router)
+
+  def getRouter(self, domain):
+    return self._getBrokerObject(Router, "org.apache.qpid.router:router:%s" % domain)
+
   def echo(self, sequence = 1, body = "Body"):
     """Request a response to test the path to the management broker"""
     args = {'sequence' : sequence, 'body' : body}
@@ -458,3 +464,18 @@ class Link(BrokerObject):
 class Acl(BrokerObject):
   def __init__(self, broker, values):
     BrokerObject.__init__(self, broker, values)
+
+class Router(BrokerObject):
+  def __init__(self, broker, values):
+    BrokerObject.__init__(self, broker, values)
+
+  def addLink(self, host, port, transport="tcp", authMechanism="ANONYMOUS", username="", password=""):
+    self.broker._method("add_link", {'host':host, 'port':port, 'transport':transport, 'authMechanism':authMechanism, 'username':username, 'password':password}, "org.apache.qpid.router:router:%s" % self.domain)
+
+  def delLink(self, host, port):
+    self.broker._method("del_link", {'host':host, 'port':port}, "org.apache.qpid.router:router:%s" % self.domain)
+
+  def getRouterData(self, kind):
+    result = self.broker._method("get_router_data", {'kind':kind}, "org.apache.qpid.router:router:%s" % self.domain)
+    return result['result']
+

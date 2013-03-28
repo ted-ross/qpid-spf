@@ -209,6 +209,7 @@ execute_process(COMMAND ${RUBY_EXECUTABLE} -I ${rgen_dir} ${rgen_dir}/generate $
                  ${CMAKE_CURRENT_SOURCE_DIR}/qpid/acl/management-schema.xml
                  ${CMAKE_CURRENT_SOURCE_DIR}/qpid/ha/management-schema.xml
                  ${CMAKE_CURRENT_SOURCE_DIR}/qpid/legacystore/management-schema.xml
+                 ${CMAKE_CURRENT_SOURCE_DIR}/qpid/spf/management-schema.xml
   )
   set(mgen_dir ${qpid-cpp_SOURCE_DIR}/managementgen)
   set(regen_mgmt OFF)
@@ -686,6 +687,9 @@ include (ssl.cmake)
 
 # Check for optional AMQP 1.0 support requirements
 include (amqp.cmake)
+
+# Check for optional Shortest-Path-Federation requirements
+include (spf.cmake)
 
 # Check for syslog capabilities not present on all systems
 check_symbol_exists (LOG_AUTHPRIV "sys/syslog.h" HAVE_LOG_AUTHPRIV)

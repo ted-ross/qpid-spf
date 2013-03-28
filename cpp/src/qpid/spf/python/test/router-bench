@@ -1,0 +1,134 @@
+#!/usr/bin/env python
+
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+import os
+from optparse import OptionParser, OptionGroup
+import sys
+import locale
+import time
+from router_engine import PathEngine
+from data import LinkState
+from qpidtoollibs import Display, Header, Sorter, YN, Commas, TimeLong
+
+RING   = 1
+MESH   = 2
+GROUPS = 3
+
+class Config:
+    def __init__(self):
+        self.start_nodes = 10
+        self.end_nodes   = 100
+        self.increment   = 10
+        self.topology    = RING
+
+config = Config()
+
+def OptionsAndArguments(argv):
+    """ Set global variables for options, return arguments """
+
+    global config
+
+    usage = """%prog [options]"""
+
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-s", "--start-nodes",  action="store", type="int",    default="10",    metavar="<nodes>",     help="Start Node Count")
+    parser.add_option("-e", "--end-nodes",    action="store", type="int",    default="100",   metavar="<nodes>",     help="End Node Count")
+    parser.add_option("-i", "--increment",    action="store", type="int",    default="10",    metavar="<nodes>",     help="Node Count Increment")
+    parser.add_option("-t", "--topology",     action="store", type="string", default="ring",  metavar="<topology>",  help="Topology: ring, mesh")
+
+    opts, args = parser.parse_args(args=argv)
+
+    config.start_nodes = opts.start_nodes
+    config.end_nodes   = opts.end_nodes
+    config.increment   = opts.increment
+
+    if opts.topology == 'ring': config.topology = RING
+    if opts.topology == 'mesh': config.topology = MESH
+
+    return args
+
+class Bench:
+    def __init__(self):
+        self.next_hops = None
+        self.id = 'Node-0'
+        self.area = 'area'
+
+    def next_hops_changed(self, nh):
+        self.next_hops = nh
+
+    def NodeName(self, num, nodes):
+        return "Node-%d" % (num % nodes)
+
+    def RunOnceRing(self, nodes):
+        collection = {}
+        for i in range(nodes):
+            collection[self.NodeName(i, nodes)] = LinkState(None, self.NodeName(i, nodes), 'area', 1, [self.NodeName(i - 1, nodes), self.NodeName(i + 1, nodes)])
+        engine = PathEngine(self)
+        start_time = time.time()
+        engine.ls_collection_changed(collection)
+        engine.tick(1.0)
+        end_time = time.time()
+        return end_time - start_time
+
+    def RunOnceMesh(self, nodes):
+        collection = {}
+        node_range = range(nodes)
+        for i in node_range:
+            peers = []
+            for j in node_range:
+                if i != j:
+                    peers.append(self.NodeName(j, nodes))
+            collection[self.NodeName(i, nodes)] = LinkState(None, self.NodeName(i, nodes), 'area', 1, peers)
+        engine = PathEngine(self)
+        start_time = time.time()
+        engine.ls_collection_changed(collection)
+        engine.tick(1.0)
+        end_time = time.time()
+        return end_time - start_time
+
+    def RunRange(self):
+        global config
+        result = []
+        nodes = config.start_nodes
+        while nodes <= config.end_nodes:
+            if config.topology == RING:
+                measure = self.RunOnceRing(nodes)
+            if config.topology == MESH:
+                measure = self.RunOnceMesh(nodes)
+            result.append([nodes, measure])
+            nodes += config.increment
+        return result
+
+def Main():
+    bench = Bench()
+    results = bench.RunRange()
+    disp = Display(prefix = "  ")
+    heads = [Header('Node-Count'), Header('Time')]
+    disp.formattedTable('Benchmark Times', heads, results)
+
+def main(argv=None):
+    args = OptionsAndArguments(argv)
+    Main()
+    return 0
+
+if __name__ == "__main__":
+        sys.exit(main())

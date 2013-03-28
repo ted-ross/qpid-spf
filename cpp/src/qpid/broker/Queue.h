@@ -235,6 +235,9 @@ class Queue : public boost::enable_shared_from_this<Queue>,
     QPID_BROKER_EXTERN bool bind(
         boost::shared_ptr<Exchange> exchange, const std::string& key,
         const qpid::framing::FieldTable& arguments=qpid::framing::FieldTable());
+    QPID_BROKER_EXTERN bool bind(
+        Exchange& exchange, const std::string& key,
+        const qpid::framing::FieldTable& arguments=qpid::framing::FieldTable());
 
     /**
      * Removes (and dequeues) a message by its sequence number (used

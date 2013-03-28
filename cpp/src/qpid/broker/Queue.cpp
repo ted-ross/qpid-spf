@@ -1458,18 +1458,25 @@ void Queue::flush()
 }
 
 
-bool Queue::bind(boost::shared_ptr<Exchange> exchange, const std::string& key,
+bool Queue::bind(Exchange& exchange, const std::string& key,
                  const qpid::framing::FieldTable& arguments)
 {
-    if (exchange->bind(shared_from_this(), key, &arguments)) {
-        bound(exchange->getName(), key, arguments);
-        if (exchange->isDurable() && isDurable()) {
-            store->bind(*exchange, *this, key, arguments);
+    if (exchange.bind(shared_from_this(), key, &arguments)) {
+        bound(exchange.getName(), key, arguments);
+        if (exchange.isDurable() && isDurable()) {
+            store->bind(exchange, *this, key, arguments);
         }
         return true;
     } else {
         return false;
     }
+}
+
+
+bool Queue::bind(boost::shared_ptr<Exchange> exchange, const std::string& key,
+                 const qpid::framing::FieldTable& arguments)
+{
+    return bind(*exchange, key, arguments);
 }
 
 

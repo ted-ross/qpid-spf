@@ -28,14 +28,12 @@ using namespace qpid::framing;
 using namespace qpid::sys;
 
 ManagementTopicExchange::ManagementTopicExchange(const std::string& _name, Manageable* _parent, Broker* b) :
-    Exchange (_name, _parent, b),
     TopicExchange(_name, _parent, b),
     managementAgent(0) {}
 ManagementTopicExchange::ManagementTopicExchange(const std::string& _name,
                                                  bool               _durable,
                                                  const FieldTable&  _args,
                                                  Manageable*        _parent, Broker* b) :
-    Exchange (_name, _durable, _args, _parent, b), 
     TopicExchange(_name, _durable, _args, _parent, b),
     managementAgent(0) {}
 
