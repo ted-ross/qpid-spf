@@ -1,0 +1,97 @@
+#!/bin/bash
+#set -x
+
+ROOT=$HOME/git/qpid-spf
+SRC=$ROOT/build/src
+QPIDD=$SRC/qpidd
+SPF=$SRC/spf.so
+QPID_CONFIG=$ROOT/tools/src/py/qpid-config
+LINK=$ROOT/tools/src/py/link-routers
+DATA_DIR=$HOME/.qpidd
+
+export PYTHONPATH=$ROOT/python:$ROOT/tools/src/py:$ROOT/cpp/src/qpid/spf/python
+
+DOMAIN=spfdemo.com
+
+P1=10001
+P2=10002
+P3=10003
+P4=10004
+P5=10005
+P6=10006
+P7=10007
+P8=10008
+P9=10009
+P10=10010
+P11=10011
+P12=10012
+
+B1=localhost:$P1
+B2=localhost:$P2
+B3=localhost:$P3
+B4=localhost:$P4
+B5=localhost:$P5
+B6=localhost:$P6
+B7=localhost:$P7
+B8=localhost:$P8
+B9=localhost:$P9
+B10=localhost:$P10
+B11=localhost:$P11
+B12=localhost:$P12
+
+QPIDD_OPTIONS="--load-module $SPF --log-enable notice+ --log-enable info+:spf --log-to-stderr no --auth no"
+QPIDD_START_OPTIONS="$QPIDD_OPTIONS --daemon"
+QPIDD_STOP_OPTIONS="$QPIDD_OPTIONS --quit"
+
+echo "[Starting Brokers...]"
+$QPIDD $QPIDD_START_OPTIONS --port $P1  --log-to-file log1  --data-dir $DATA_DIR/$P1  --federation-tag A1
+$QPIDD $QPIDD_START_OPTIONS --port $P2  --log-to-file log2  --data-dir $DATA_DIR/$P2  --federation-tag A2
+$QPIDD $QPIDD_START_OPTIONS --port $P3  --log-to-file log3  --data-dir $DATA_DIR/$P3  --federation-tag A3
+$QPIDD $QPIDD_START_OPTIONS --port $P4  --log-to-file log4  --data-dir $DATA_DIR/$P4  --federation-tag B4
+$QPIDD $QPIDD_START_OPTIONS --port $P5  --log-to-file log5  --data-dir $DATA_DIR/$P5  --federation-tag B5
+$QPIDD $QPIDD_START_OPTIONS --port $P6  --log-to-file log6  --data-dir $DATA_DIR/$P6  --federation-tag B6
+$QPIDD $QPIDD_START_OPTIONS --port $P7  --log-to-file log7  --data-dir $DATA_DIR/$P7  --federation-tag C7
+$QPIDD $QPIDD_START_OPTIONS --port $P8  --log-to-file log8  --data-dir $DATA_DIR/$P8  --federation-tag C8
+$QPIDD $QPIDD_START_OPTIONS --port $P9  --log-to-file log9  --data-dir $DATA_DIR/$P9  --federation-tag C9
+$QPIDD $QPIDD_START_OPTIONS --port $P10 --log-to-file log10 --data-dir $DATA_DIR/$P10 --federation-tag D10
+$QPIDD $QPIDD_START_OPTIONS --port $P11 --log-to-file log11 --data-dir $DATA_DIR/$P11 --federation-tag X11
+$QPIDD $QPIDD_START_OPTIONS --port $P12 --log-to-file log12 --data-dir $DATA_DIR/$P12 --federation-tag X12
+
+echo "[Creating Routers...]"
+$QPID_CONFIG -b $B1  add exchange spf $DOMAIN --argument spf.router_id=A1
+$QPID_CONFIG -b $B2  add exchange spf $DOMAIN --argument spf.router_id=A2
+$QPID_CONFIG -b $B3  add exchange spf $DOMAIN --argument spf.router_id=A3
+$QPID_CONFIG -b $B4  add exchange spf $DOMAIN --argument spf.router_id=B4
+$QPID_CONFIG -b $B5  add exchange spf $DOMAIN --argument spf.router_id=B5
+$QPID_CONFIG -b $B6  add exchange spf $DOMAIN --argument spf.router_id=B6
+$QPID_CONFIG -b $B7  add exchange spf $DOMAIN --argument spf.router_id=C7
+$QPID_CONFIG -b $B8  add exchange spf $DOMAIN --argument spf.router_id=C8
+$QPID_CONFIG -b $B9  add exchange spf $DOMAIN --argument spf.router_id=C9
+$QPID_CONFIG -b $B10 add exchange spf $DOMAIN --argument spf.router_id=D10
+$QPID_CONFIG -b $B11 add exchange spf $DOMAIN --argument spf.router_id=X11
+$QPID_CONFIG -b $B12 add exchange spf $DOMAIN --argument spf.router_id=X12
+
+echo "[Linking up the Topology...]"
+$LINK $DOMAIN $B1 $B2
+$LINK $DOMAIN $B2 $B3
+$LINK $DOMAIN $B1 $B3
+
+$LINK $DOMAIN $B4 $B5
+$LINK $DOMAIN $B5 $B6
+$LINK $DOMAIN $B4 $B6
+
+$LINK $DOMAIN $B7 $B8
+$LINK $DOMAIN $B8 $B9
+$LINK $DOMAIN $B7 $B9
+
+$LINK $DOMAIN $B10 $B9
+
+$LINK $DOMAIN $B11 $B12
+
+$LINK $DOMAIN $B11 $B1
+$LINK $DOMAIN $B12 $B2
+$LINK $DOMAIN $B11 $B4
+$LINK $DOMAIN $B12 $B5
+$LINK $DOMAIN $B11 $B7
+$LINK $DOMAIN $B12 $B8
+
