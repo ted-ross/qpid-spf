@@ -1,7 +1,11 @@
 #!/bin/bash
 #set -x
 
+##
+## Set the ROOT variable to reference your qpid-spf directory
+##
 ROOT=$HOME/git/qpid-spf
+
 SRC=$ROOT/build/src
 QPIDD=$SRC/qpidd
 SPF=$SRC/spf.so
